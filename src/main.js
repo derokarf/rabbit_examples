@@ -1,7 +1,7 @@
-const rabbit = require("./retries/rabbit_init");
+const example = require("./retries");
 
 async function main() {
-  return rabbit.initQueues();
+  return example.main();
 }
 
 main()

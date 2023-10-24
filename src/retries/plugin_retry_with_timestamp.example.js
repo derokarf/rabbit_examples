@@ -1,12 +1,15 @@
 const amqplib = require("amqplib");
 
-async function initQueues() {
+// Retrying with installed delay plugin and control proccess with timestamp of messages
+
+async function run() {
   const exampleQueue = "test-queue";
   const exampleExchange = "test-exchange";
-  const delayExchange = "delay-exchange";
+  const delayedExchange = "delayed-exchange";
   const routingKey = "test";
   const rabbitConnection = await amqplib.connect("amqp://test-rabbitmq", {});
   const delayTimeout = 5000; // ms
+  const TTL = 13000;
 
   // Channels
   const rabbitSenderChannel = await rabbitConnection.createChannel();
@@ -18,7 +21,7 @@ async function initQueues() {
   // Exchanges
   await rabbitSenderChannel.assertExchange(exampleExchange, "direct"); // direct
   await rabbitReceiverChannel.assertExchange(
-    delayExchange,
+    delayedExchange,
     "x-delayed-message",
     { arguments: { "x-delayed-type": "direct" } },
   ); // direct with delay
@@ -31,7 +34,7 @@ async function initQueues() {
   ); // to direct sending
   await rabbitReceiverChannel.bindQueue(
     exampleQueue,
-    delayExchange,
+    delayedExchange,
     routingKey,
   ); // to repeated sending with delay
 
@@ -45,34 +48,34 @@ async function initQueues() {
 
   // Consumer
   await rabbitReceiverChannel.consume(exampleQueue, async (msg) => {
-    console.log(msg);
     try {
       handler(msg.content.toString());
 
       rabbitReceiverChannel.ack(msg);
     } catch (err) {
-      const attempts =
-        parseInt(msg.properties?.headers["x-republish-attempts"], 10) || 0;
+      const timestamp = parseInt(msg.properties?.timestamp, 10) || 0;
 
-      if (attempts > 3) {
+      const actualTime = Date.now();
+
+      if (actualTime - timestamp > TTL) {
         rabbitReceiverChannel.ack(msg);
 
-        console.log(
-          "ERROR: Maximum number of attemps reached, message was droped",
-        );
+        console.log("ERROR: Maximum TTL reached, message was droped");
       } else {
         console.log(
-          `ERROR: Something went wrong. Received message was republish with ${delayTimeout} ms delay, ${attempts} attempt`,
+          `ERROR: Something went wrong. Received message was republish with ${delayTimeout} ms delay, ${
+            TTL - (actualTime - timestamp)
+          } ms left`,
         );
 
         rabbitReceiverChannel.publish(
-          delayExchange,
+          delayedExchange,
           msg.fields.routingKey,
           msg.content,
           {
+            timestamp: msg.properties.timestamp,
             headers: {
               ...msg.properties.headers,
-              "x-republish-attempts": attempts + 1,
               "x-delay": delayTimeout,
             },
           },
@@ -88,6 +91,9 @@ async function initQueues() {
       exampleExchange,
       "test",
       Buffer.from("Right message"),
+      {
+        timestamp: Date.now(), // set timestamp of message
+      },
     );
   }, 1000);
 
@@ -96,10 +102,13 @@ async function initQueues() {
       exampleExchange,
       routingKey,
       Buffer.from("Wrong message"),
+      {
+        timestamp: Date.now(), // set timestamp of message
+      },
     );
   }, 2000);
 }
 
 module.exports = {
-  initQueues,
+  run,
 };
