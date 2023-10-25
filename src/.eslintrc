@@ -1,0 +1,54 @@
+{
+  "extends": [
+    "airbnb-base",
+    "eslint:recommended",
+    "prettier"
+  ],
+  "plugins": [
+      "prettier"
+  ],
+  "parserOptions": {
+    "ecmaVersion": 2020
+  },
+  "rules": {
+    "no-console": "warn",
+    "newline-after-var": ["error", "always"],
+    "newline-before-return": "error",
+    "no-return-await": "error",
+
+    "prettier/prettier": "error",
+    "import/order": ["error", {
+        "newlines-between": "always",
+        "alphabetize": {
+            "order": "asc",
+            "caseInsensitive": false
+        },
+        "pathGroups": [
+            {
+                "pattern": "../**",
+                "group": "internal",
+                "position": "after"
+            }
+        ]
+    }],
+    "import/prefer-default-export": 0,
+    "import/extensions": 0,
+    "import/no-cycle": 0,
+    "no-useless-constructor": 0,
+    "class-methods-use-this": 0,
+    "no-shadow": "off",
+    "prefer-const": ["error", {
+        "destructuring": "all"
+    }],
+    "no-empty-function": "off"
+  },
+  "overrides": [
+    {
+        "files": ["*.spec.ts"],
+        "rules": {
+            "no-console": "off",
+            "import/no-extraneous-dependencies": "off"
+        }
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+version: '3.0'
+
+services:
+    test-nodejs:
+        container_name: test-nodejs
+        depends_on:
+            - test-rabbitmq
+        build: docker_conf/nodejs
+        env_file:
+            - .env.test
+        volumes:
+            - ./src:/app
+        working_dir: /app
+        command: /bin/sh
+        stdin_open: true
+        tty: true
+        networks:
+            - test-rabbitmq-network
+
+    test-rabbitmq:
+        container_name: test-rabbitmq
+        build: docker_conf/rabbitmq
+        ports:
+            - 15672:15672
+        networks:
+            - test-rabbitmq-network
+networks:
+    test-rabbitmq-network:
+        external: true
+
