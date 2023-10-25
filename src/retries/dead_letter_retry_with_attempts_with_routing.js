@@ -1,14 +1,16 @@
 const amqplib = require("amqplib");
 
-// Retrying with dead-letter and control proccess with number of attemts and routing
+console.log(
+  "EXAMPLE 4: Retrying with dead-letter and control proccess with number of attemts and routing",
+);
 
 async function run() {
   const exampleQueue = "test-queue";
   const delayedQueue = "delayed-queue"; // queue without consumers
   const delayedExchange = "delayed-exchange";
   const exampleExchange = "example-exchange";
+  const replayExchange = "replay-exchange";
   const exampleRoutingKey = "example-routing-key";
-  const delayedRoutingKey = "delayed-routing-key";
   const rabbitConnection = await amqplib.connect("amqp://test-rabbitmq", {});
   const delayTimeout = 5000; // ms
 
@@ -16,16 +18,24 @@ async function run() {
   const rabbitSenderChannel = await rabbitConnection.createChannel();
   const rabbitReceiverChannel = await rabbitConnection.createChannel();
 
+  await Promise.all([
+    rabbitReceiverChannel.deleteQueue(exampleQueue),
+    rabbitReceiverChannel.deleteQueue(delayedQueue),
+    rabbitReceiverChannel.deleteExchange(delayedExchange),
+    rabbitReceiverChannel.deleteExchange(exampleExchange),
+    rabbitReceiverChannel.deleteExchange(replayExchange),
+  ]);
+
   // Queues
   await rabbitReceiverChannel.assertQueue(exampleQueue);
   await rabbitReceiverChannel.assertQueue(delayedQueue, {
-    deadLetterExchange: delayedExchange,
-    deadLetterRoutingKey: delayedRoutingKey, // set the queue to send a message after expiration
+    deadLetterExchange: replayExchange,
   });
 
   // Exchanges
   await rabbitReceiverChannel.assertExchange(exampleExchange, "direct");
   await rabbitReceiverChannel.assertExchange(delayedExchange, "direct");
+  await rabbitReceiverChannel.assertExchange(replayExchange, "direct");
 
   // Bindings
   await rabbitReceiverChannel.bindQueue(
@@ -35,8 +45,14 @@ async function run() {
   );
 
   await rabbitReceiverChannel.bindQueue(
-    exampleQueue,
+    delayedQueue,
     delayedExchange,
+    exampleRoutingKey,
+  );
+
+  await rabbitReceiverChannel.bindQueue(
+    exampleQueue,
+    replayExchange,
     exampleRoutingKey,
   );
 
@@ -73,13 +89,17 @@ async function run() {
           } ms delay, ${attempts} attempt`,
         );
 
-        rabbitReceiverChannel.publish("", delayedQueue, msg.content, {
-          expiration: delayTimeout * newAttemps,
-          headers: {
-            "x-republish-attempts": newAttemps, // save number of attepts
-            "x-dead-letter-routing-key": msg.fields.routingKey,
+        rabbitReceiverChannel.publish(
+          delayedExchange,
+          exampleRoutingKey,
+          msg.content,
+          {
+            expiration: delayTimeout * newAttemps,
+            headers: {
+              "x-republish-attempts": newAttemps, // save number of attepts
+            },
           },
-        });
+        );
 
         rabbitReceiverChannel.ack(msg);
       }

@@ -1,6 +1,8 @@
 const amqplib = require("amqplib");
 
-// Retrying with installed delay plugin and control proccess with number of attemts
+console.log(
+  "EXAMPLE 1: Retrying with installed delay plugin and control proccess with number of attemts",
+);
 
 async function run() {
   const exampleQueue = "test-queue";
@@ -13,6 +15,12 @@ async function run() {
   // Channels
   const rabbitSenderChannel = await rabbitConnection.createChannel();
   const rabbitReceiverChannel = await rabbitConnection.createChannel();
+
+  await Promise.all([
+    rabbitReceiverChannel.deleteQueue(exampleQueue),
+    rabbitReceiverChannel.deleteExchange(delayedExchange),
+    rabbitReceiverChannel.deleteExchange(exampleExchange),
+  ]);
 
   // Queue
   await rabbitReceiverChannel.assertQueue(exampleQueue);

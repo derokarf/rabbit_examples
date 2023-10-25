@@ -1,7 +1,7 @@
 const amqplib = require("amqplib");
 
 console.log(
-  "EXAMPLE 5: Retrying with dead-letter and control proccess with number of attemts",
+  "EXAMPLE 3: Retrying with dead-letter and control proccess with number of attemts and ampq rejecting",
 );
 
 async function run() {
@@ -20,11 +20,17 @@ async function run() {
   ]);
 
   // Queues
-  await rabbitReceiverChannel.assertQueue(exampleQueue);
-  await rabbitReceiverChannel.assertQueue(delayedQueue, {
-    deadLetterExchange: "",
-    deadLetterRoutingKey: exampleQueue,
-  });
+  await Promise.all([
+    rabbitReceiverChannel.assertQueue(exampleQueue, {
+      deadLetterExchange: "",
+      deadLetterRoutingKey: delayedQueue,
+    }),
+    rabbitReceiverChannel.assertQueue(delayedQueue, {
+      deadLetterExchange: "",
+      deadLetterRoutingKey: exampleQueue,
+      messageTtl: delayTimeout,
+    }),
+  ]);
 
   const handler = (message) => {
     if (message === "Right message") {
@@ -41,8 +47,13 @@ async function run() {
 
       rabbitReceiverChannel.ack(msg);
     } catch (err) {
-      const attempts =
-        parseInt(msg.properties?.headers["x-republish-attempts"], 10) || 0;
+      const deaths = msg.properties.headers["x-death"];
+
+      const delayedAttempt = deaths?.find(
+        (death) => death.queue === delayedQueue,
+      );
+
+      const attempts = delayedAttempt?.count || 0;
 
       if (attempts > 3) {
         rabbitReceiverChannel.ack(msg);
@@ -55,14 +66,7 @@ async function run() {
           `ERROR: Something went wrong. Received message was republish with ${delayTimeout} ms delay, ${attempts} attempt`,
         );
 
-        rabbitReceiverChannel.publish("", delayedQueue, msg.content, {
-          expiration: delayTimeout,
-          headers: {
-            "x-republish-attempts": attempts + 1, // save number of attepts
-          },
-        });
-
-        rabbitReceiverChannel.ack(msg);
+        rabbitReceiverChannel.reject(msg, false);
       }
     }
   });

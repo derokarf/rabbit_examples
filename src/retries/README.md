@@ -1,3 +1,3 @@
 # retries example
 
-Uncomment a required example in the ./src/retries/index.js and run ./src/main.js
+Uncomment a required example in the ./src/retries/main.js and run "node ./retries/main.js"
